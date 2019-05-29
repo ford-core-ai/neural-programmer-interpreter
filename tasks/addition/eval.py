@@ -11,7 +11,7 @@ import pickle
 import tensorflow as tf
 
 LOG_PATH = "tasks/addition/log/"
-CKPT_PATH = "tasks/addition/log/model.ckpt"
+CKPT_PATH = "tasks/addition/log/"
 TEST_PATH = "tasks/addition/data/test.pik"
 MOVE_PID, WRITE_PID = 0, 1
 W_PTRS = {0: "OUT", 1: "CARRY"}
@@ -36,7 +36,8 @@ def evaluate_addition():
 
         # Restore from Checkpoint
         saver = tf.train.Saver()
-        saver.restore(sess, CKPT_PATH)
+        ckpt = tf.train.latest_checkpoint(CKPT_PATH)
+        saver.restore(sess, ckpt)
 
         # Run REPL
         repl(sess, npi, data)
@@ -54,7 +55,12 @@ def repl(session, npi, data):
 
         # Reset NPI States
         print("")
-        npi.reset_state()
+        npi.deactivate_state()
+        _ = session.run([npi.h],
+                        feed_dict={npi.env_in: np.zeros([1, CONFIG["ENVIRONMENT_ROW"] * CONFIG["ENVIRONMENT_DEPTH"]]),
+                                   npi.arg_in: np.zeros([1, CONFIG["ARGUMENT_NUM"] * CONFIG["ARGUMENT_DEPTH"]]),
+                                   npi.prg_in: np.zeros([1, 1])})
+        npi.reactivate_state()
 
         # Setup Environment
         scratch = ScratchPad(x, y)

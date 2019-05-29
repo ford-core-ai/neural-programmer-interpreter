@@ -25,6 +25,9 @@ class NPI():
         self.num_progs, self.key_dim = config["PROGRAM_NUM"], config["PROGRAM_KEY_SIZE"]
         self.log_path, self.verbose = log_path, verbose
 
+        # Setup LSTM State Control
+        self.lstm_stateful = True
+
         # Setup Label Placeholders
         self.y_term = tf.placeholder(tf.int64, shape=[None], name='Termination_Y')
         self.y_prog = tf.placeholder(tf.int64, shape=[None], name='Program_Y')
@@ -32,7 +35,6 @@ class NPI():
                                       name='Arg{}_Y'.format(str(i))) for i in range(self.num_args)]
 
         # Build NPI LSTM Core, hidden state
-        self.reset_state()
         self.h = self.npi_core()
 
         # Build Termination Network => Returns probability of terminating
@@ -63,13 +65,19 @@ class NPI():
         self.default_train_op = self.opt.minimize(self.default_loss, global_step=self.global_step)
         self.arg_train_op = self.opt.minimize(self.arg_loss, global_step=self.global_step)
 
-    def reset_state(self):
+    def deactivate_state(self):
         """
         Zero NPI Core LSTM Hidden States. LSTM States are represented as a Tuple, consisting of the
         LSTM C State, and the LSTM H State (in that order: (c, h)).
         """
-        zero_state = tf.zeros([self.bsz, 2 * self.npi_core_dim])
-        self.h_states = [zero_state for _ in range(self.npi_core_layers)]
+        self.lstm_stateful = False
+
+    def reactivate_state(self):
+        """
+        Zero NPI Core LSTM Hidden States. LSTM States are represented as a Tuple, consisting of the
+        LSTM C State, and the LSTM H State (in that order: (c, h)).
+        """
+        self.lstm_stateful = True
 
     def npi_core(self):
         """
@@ -90,7 +98,8 @@ class NPI():
         # Feed through Multi-Layer LSTM
         for i in range(self.npi_core_layers):
             c = tf.keras.layers.CuDNNLSTM(self.npi_core_dim,
-                                          return_sequences=True)(c)
+                                          return_sequences=True,
+                                          stateful=self.lstm_stateful)(c)
 
         # Return Top-Most LSTM H-State
         top_state = tf.split(c, [-1, 1], axis=1)[1]
@@ -148,8 +157,6 @@ class NPI():
         Build separate loss computations, using the logits from each of the sub-networks.
         """
         # Termination Network Loss
-        print(self.terminate)
-        print(self.y_term)
         termination_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=self.terminate, labels=self.y_term), name='Termination_Network_Loss')
 
