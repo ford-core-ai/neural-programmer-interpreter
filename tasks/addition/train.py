@@ -48,12 +48,9 @@ def train_addition(epochs, verbose=0):
         for ep in range(1, epochs + 1):
             for i in range(len(data)):
                 # Reset NPI States
-                npi.deactivate_state()
-                _ = sess.run([npi.h],
-                             feed_dict={npi.env_in: np.zeros([1, CONFIG["ENVIRONMENT_ROW"] * CONFIG["ENVIRONMENT_DEPTH"]]),
-                                        npi.arg_in: np.zeros([1, CONFIG["ARGUMENT_NUM"] * CONFIG["ARGUMENT_DEPTH"]]),
-                                        npi.prg_in: np.zeros([1, 1])})
-                npi.reactivate_state()
+                states = np.zeros([npi.npi_core_layers, npi.bsz, 2*npi.npi_core_dim])
+                # npi.reset_state()
+                # print(npi.h_states)
 
                 # Setup Environment
                 in1, in2, steps = data[i]
@@ -64,6 +61,7 @@ def train_addition(epochs, verbose=0):
                 step_def_loss, step_arg_loss, term_acc, prog_acc, = 0.0, 0.0, 0.0, 0.0
                 arg0_acc, arg1_acc, arg2_acc, num_args = 0.0, 0.0, 0.0, 0
                 for j in range(len(x)):
+                    # print("suboperation {}: ".format(j))
                     (prog_name, prog_in_id), arg, term = x[j]
                     (_, prog_out_id), arg_out, term_out = y[j]
 
@@ -79,12 +77,12 @@ def train_addition(epochs, verbose=0):
 
                     # Fit!
                     if prog_out_id == MOVE_PID or prog_out_id == WRITE_PID:
-                        loss, t_acc, p_acc, a_acc, _ = sess.run(
-                            [npi.arg_loss, npi.t_metric, npi.p_metric, npi.a_metrics, npi.arg_train_op],
+                        loss, t_acc, p_acc, a_acc, h_states, _ = sess.run(
+                            [npi.arg_loss, npi.t_metric, npi.p_metric, npi.a_metrics, npi.h_states, npi.arg_train_op],
                             feed_dict={npi.env_in: env_in, npi.arg_in: arg_in, npi.prg_in: prog_in,
                                        npi.y_prog: prog_out, npi.y_term: term_out,
                                        npi.y_args[0]: [arg_out[0]], npi.y_args[1]: [arg_out[1]],
-                                       npi.y_args[2]: [arg_out[2]]})
+                                       npi.y_args[2]: [arg_out[2]], npi.states: states})
                         step_arg_loss += loss
                         term_acc += t_acc
                         prog_acc += p_acc
@@ -92,14 +90,16 @@ def train_addition(epochs, verbose=0):
                         arg1_acc += a_acc[1]
                         arg2_acc += a_acc[2]
                         num_args += 1
+                        states = np.reshape(h_states, [npi.npi_core_layers, npi.bsz, 2*npi.npi_core_dim])
                     else:
-                        loss, t_acc, p_acc, _ = sess.run(
-                            [npi.default_loss, npi.t_metric, npi.p_metric, npi.default_train_op],
+                        loss, t_acc, p_acc, h_states, _ = sess.run(
+                            [npi.default_loss, npi.t_metric, npi.p_metric, npi.h_states, npi.default_train_op],
                             feed_dict={npi.env_in: env_in, npi.arg_in: arg_in, npi.prg_in: prog_in,
-                                       npi.y_prog: prog_out, npi.y_term: term_out})
+                                       npi.y_prog: prog_out, npi.y_term: term_out, npi.states: states})
                         step_def_loss += loss
                         term_acc += t_acc
                         prog_acc += p_acc
+                        states = np.reshape(h_states, [npi.npi_core_layers, npi.bsz, 2*npi.npi_core_dim])
 
                 print("Epoch {0:02d} Step {1:03d} Default Step Loss {2:05f}, " \
                       "Argument Step Loss {3:05f}, Term: {4:03f}, Prog: {5:03f}, A0: {6:03f}, " \

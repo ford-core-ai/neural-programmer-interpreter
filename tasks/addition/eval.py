@@ -55,12 +55,8 @@ def repl(session, npi, data):
 
         # Reset NPI States
         print("")
-        npi.deactivate_state()
-        _ = session.run([npi.h],
-                        feed_dict={npi.env_in: np.zeros([1, CONFIG["ENVIRONMENT_ROW"] * CONFIG["ENVIRONMENT_DEPTH"]]),
-                                   npi.arg_in: np.zeros([1, CONFIG["ARGUMENT_NUM"] * CONFIG["ARGUMENT_DEPTH"]]),
-                                   npi.prg_in: np.zeros([1, 1])})
-        npi.reactivate_state()
+        states = np.zeros([npi.npi_core_layers, npi.bsz, 2*npi.npi_core_dim])
+        # npi.reset_state()
 
         # Setup Environment
         scratch = ScratchPad(x, y)
@@ -93,9 +89,11 @@ def repl(session, npi, data):
 
             # Get Environment, Argument Vectors
             env_in, arg_in, prog_in = [scratch.get_env()], [get_args(arg, arg_in=True)], [[prog_id]]
-            t, n_p, n_args = session.run([npi.terminate, npi.program_distribution, npi.arguments],
+            t, n_p, n_args, h_states = session.run([npi.terminate, npi.program_distribution, npi.arguments, npi.h_states],
                                          feed_dict={npi.env_in: env_in, npi.arg_in: arg_in,
-                                                    npi.prg_in: prog_in})
+                                                    npi.prg_in: prog_in, npi.states: states})
+
+            states = np.reshape(h_states, [npi.npi_core_layers, npi.bsz, 2 * npi.npi_core_dim])
 
             if np.argmax(t) == 1:
                 print('Step: %s, Arguments: %s, Terminate: %s' % (prog_name, a_str, str(True)))

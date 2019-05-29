@@ -35,6 +35,13 @@ class NPI():
                                       name='Arg{}_Y'.format(str(i))) for i in range(self.num_args)]
 
         # Build NPI LSTM Core, hidden state
+        self.states = tf.placeholder(tf.float32, shape=[self.npi_core_layers, self.bsz, 2*self.npi_core_dim],
+                                     name='LSTM_States')
+        self.h_states = []
+        self.split_states = tf.split(self.states, self.npi_core_layers, axis=0)
+        for split_state in self.split_states:
+            self.h_states.append(tf.split(tf.squeeze(split_state, axis=0), 2, axis=-1))
+
         self.h = self.npi_core()
 
         # Build Termination Network => Returns probability of terminating
@@ -65,19 +72,15 @@ class NPI():
         self.default_train_op = self.opt.minimize(self.default_loss, global_step=self.global_step)
         self.arg_train_op = self.opt.minimize(self.arg_loss, global_step=self.global_step)
 
-    def deactivate_state(self):
-        """
-        Zero NPI Core LSTM Hidden States. LSTM States are represented as a Tuple, consisting of the
-        LSTM C State, and the LSTM H State (in that order: (c, h)).
-        """
-        self.lstm_stateful = False
-
-    def reactivate_state(self):
-        """
-        Zero NPI Core LSTM Hidden States. LSTM States are represented as a Tuple, consisting of the
-        LSTM C State, and the LSTM H State (in that order: (c, h)).
-        """
-        self.lstm_stateful = True
+    # def reset_state(self):
+    #     """
+    #     Zero NPI Core LSTM Hidden States. LSTM States are represented as a Tuple, consisting of the
+    #     LSTM C State, and the LSTM H State (in that order: (c, h)).
+    #     """
+    #     zero_state = [tf.zeros([self.bsz, self.npi_core_dim]), tf.zeros([self.bsz, self.npi_core_dim])]
+    #     self.h_states = [zero_state for _ in range(self.npi_core_layers)]
+    #     self.h_states[0][0] = tf.Print(self.h_states[0][0], [self.h_states], message="states reset:")
+    #     print(self.h_states)
 
     def npi_core(self):
         """
@@ -97,9 +100,10 @@ class NPI():
 
         # Feed through Multi-Layer LSTM
         for i in range(self.npi_core_layers):
-            c = tf.keras.layers.CuDNNLSTM(self.npi_core_dim,
-                                          return_sequences=True,
-                                          stateful=self.lstm_stateful)(c)
+            # c = tf.Print(c, [self.h_states[i]], message="before: ")
+            rnn = tf.keras.layers.LSTMCell(self.npi_core_dim)
+            c, self.h_states[i] = rnn(c, self.h_states[i])
+            # c = tf.Print(c, [self.h_states[i]], message="after: ")
 
         # Return Top-Most LSTM H-State
         top_state = tf.split(c, [-1, 1], axis=1)[1]
