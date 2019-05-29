@@ -48,12 +48,12 @@ class AdditionCore():
         Reference: Reed, de Freitas [9]
         """
         merge = tf.concat([self.env_in, self.arg_in], 1)
-        elu = tf.layers.dense(merge, self.hidden_dim, activation=tf.nn.elu,
-                              kernel_initializer=tf.truncated_normal_initializer)
-        elu = tf.layers.dense(elu, self.hidden_dim, activation=tf.nn.elu,
-                              kernel_initializer=tf.truncated_normal_initializer)
-        out = tf.layers.dense(elu, self.state_dim,
-                              kernel_initializer=tf.truncated_normal_initializer)
+        elu = tf.keras.layers.Dense(self.hidden_dim, activation=tf.nn.elu,
+                                    kernel_initializer=tf.truncated_normal_initializer)(merge)
+        elu = tf.keras.layers.Dense(self.hidden_dim, activation=tf.nn.elu,
+                                    kernel_initializer=tf.truncated_normal_initializer)(elu)
+        out = tf.keras.layers.Dense(self.state_dim,
+                                    kernel_initializer=tf.truncated_normal_initializer)(elu)
         return out
 
     def build_program_store(self):

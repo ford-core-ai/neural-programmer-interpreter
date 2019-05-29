@@ -23,6 +23,8 @@ def evaluate_addition():
     """
     Load NPI Model from Checkpoint, and initialize REPL, for interactive carry-addition.
     """
+    tf.logging.set_verbosity(tf.logging.ERROR)
+
     with tf.Session() as sess:
         # Load Data
         with open(TEST_PATH, 'rb') as f:

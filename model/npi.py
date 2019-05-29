@@ -132,7 +132,8 @@ class NPI():
         hidden = tf.keras.layers.Dense(self.key_dim, activation=tf.keras.activations.elu,
                                        kernel_regularizer=tf.keras.regularizers.l2,
                                        bias_regularizer=tf.keras.regularizers.l2)(self.h)
-        key = tf.keras.layers.Dense(self.key_dim, kernel_initializer=tf.truncated_normal_initializer)(hidden)    # Shape: [bsz, key_dim]
+        key = tf.keras.layers.Dense(self.key_dim,
+                                    kernel_initializer=tf.truncated_normal_initializer)(hidden)  # Shape: [bsz, key_dim]
 
         # Perform dot product operation, then softmax over all options to generate distribution
         key = tf.reshape(key, [-1, 1, self.key_dim])
@@ -151,8 +152,8 @@ class NPI():
         args = []
         for i in range(self.num_args):
             arg = tf.keras.layers.Dense(self.arg_depth, kernel_regularizer=tf.keras.regularizers.l2,
-                                       bias_regularizer=tf.keras.regularizers.l2,
-                                       name='Argument_{}'.format(str(i)))(self.h)
+                                        bias_regularizer=tf.keras.regularizers.l2,
+                                        name='Argument_{}'.format(str(i)))(self.h)
             args.append(arg)
         return args                                             # Shape: [bsz, arg_depth]
 
@@ -171,8 +172,10 @@ class NPI():
         # Argument Network Losses
         arg_losses = []
         for i in range(self.num_args):
-            arg_losses.append(tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-                logits=self.arguments[i], labels=self.y_args[i]), name='Argument{}_Network_Loss'.format(str(i))))
+            y_arg = tf.stop_gradient(self.y_args[i])
+
+            arg_losses.append(tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+                logits=self.arguments[i], labels=y_arg), name='Argument{}_Network_Loss'.format(str(i))))
 
         return termination_loss, program_loss, arg_losses
 
