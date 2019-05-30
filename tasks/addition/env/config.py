@@ -11,7 +11,7 @@ import time
 CONFIG = {
     "ENVIRONMENT_ROW": 4,         # Input 1, Input 2, Carry, Output
     "ENVIRONMENT_COL": 10,        # 10-Digit Maximum for Addition Task
-    "ENVIRONMENT_DEPTH": 10,      # Size of each element vector => One-Hot, Options: 0-9
+    "ENVIRONMENT_DEPTH": 11,      # Size of each element vector => One-Hot, Options: 0-9
 
     "ARGUMENT_NUM": 3,            # Maximum Number of Program Arguments
     "ARGUMENT_DEPTH": 11,         # Size of Argument Vector => One-Hot, Options 0-9, Default (10)
@@ -60,11 +60,12 @@ class ScratchPad():           # Addition Environment
         if self.in1_ptr[1] < -self.cols:
             return True
         else:
-            lst = [x[1] for x in self.ptrs]
-            if len(set(lst)) == 1:
-                return sum(sum([self[x[0], :min(x[1] + 1, -1)] for x in self.ptrs])) == 0
-            else:
-                return False
+            return False
+            # lst = [x[1] for x in self.ptrs]
+            # if len(set(lst)) == 1:
+            #     return sum(sum([self[x[0], :min(x[1] + 1, -1)] for x in self.ptrs])) == 0
+            # else:
+            #     return False
 
     def add1(self):
         temp = self[self.in1_ptr] + self[self.in2_ptr] + self[self.carry_ptr]
@@ -100,19 +101,19 @@ class ScratchPad():           # Addition Environment
     def get_env(self):
         env = np.zeros((CONFIG["ENVIRONMENT_ROW"], CONFIG["ENVIRONMENT_DEPTH"]), dtype=np.int32)
         if self.in1_ptr[1] < -CONFIG["ENVIRONMENT_COL"]:
-            env[0][0] = 1
+            env[0][10] = 1
         else:
             env[0][self[self.in1_ptr]] = 1
         if self.in2_ptr[1] < -CONFIG["ENVIRONMENT_COL"]:
-            env[1][0] = 1
+            env[1][10] = 1
         else:
             env[1][self[self.in2_ptr]] = 1
         if self.carry_ptr[1] < -CONFIG["ENVIRONMENT_COL"]:
-            env[2][0] = 1
+            env[2][10] = 1
         else:
             env[2][self[self.carry_ptr]] = 1
         if self.out_ptr[1] < -CONFIG["ENVIRONMENT_COL"]:
-            env[3][0] = 1
+            env[3][10] = 1
         else:
             env[3][self[self.out_ptr]] = 1
         return env.flatten()
