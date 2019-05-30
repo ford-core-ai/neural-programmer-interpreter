@@ -9,6 +9,7 @@ from tasks.addition.env.config import CONFIG, get_args, PROGRAM_SET, ScratchPad
 import numpy as np
 import pickle
 import tensorflow as tf
+from tqdm import tqdm
 
 LOG_PATH = "tasks/addition/log/"
 CKPT_PATH = "tasks/addition/log/"
@@ -46,76 +47,95 @@ def evaluate_addition():
 
 
 def repl(session, npi, data):
-    while True:
-        inpt = input('Enter Two Numbers, or Hit Enter for Random Pair: ')
+    inpt = input('Hit Enter to test, or type anything for more options: ')
+    if inpt == "":
+        correct_count = 0
+        for x, y, _ in tqdm(data):
+            result = inference(session, npi, x, y)
+            correct_count += int(result)
 
-        if inpt == "":
-            x, y, _ = data[np.random.randint(len(data))]
+        print("Test Accuracy: ", correct_count/len(data))
 
-        else:
-            x, y = map(int, inpt.split())
+    else:
+        while True:
+            inpt = input('Enter Two Numbers, or Hit Enter for Random Pair: ')
 
+            if inpt == "":
+                x, y, _ = data[np.random.randint(len(data))]
+
+            else:
+                x, y = map(int, inpt.split())
+
+            inference(session, npi, x, y, verbose=True)
+
+
+def inference(session, npi, x, y, verbose=False):
         # Reset NPI States
-        print("")
+        if verbose:
+            print("")
         states = np.zeros([npi.npi_core_layers, npi.bsz, 2*npi.npi_core_dim])
-        # npi.reset_state()
 
         # Setup Environment
         scratch = ScratchPad(x, y)
         prog_name, prog_id, arg, term = 'ADD', 2, [], False
 
-        cont = 'c'
-        while cont == 'c' or cont == 'C':
-            # Print Step Output
-            if prog_id == MOVE_PID:
-                a0, a1 = PTRS.get(arg[0], "OOPS!"), R_L[arg[1]]
-                a_str = "[%s, %s]" % (str(a0), str(a1))
-            elif prog_id == WRITE_PID:
-                a0, a1 = W_PTRS[arg[0]], arg[1]
-                a_str = "[%s, %s]" % (str(a0), str(a1))
-            else:
-                a_str = "[]"
-
-            print('Step: %s, Arguments: %s, Terminate: %s' % (prog_name, a_str, str(term)))
-            print('IN 1: %s, IN 2: %s, CARRY: %s, OUT: %s' % (scratch.in1_ptr[1],
-                                                              scratch.in2_ptr[1],
-                                                              scratch.carry_ptr[1],
-                                                              scratch.out_ptr[1]))
-
+        while True:
             # Update Environment if MOVE or WRITE
             if prog_id == MOVE_PID or prog_id == WRITE_PID:
                 scratch.execute(prog_id, arg)
 
-            # Print Environment
-            scratch.pretty_print()
+            if verbose:
+                # Print Step Output
+                if prog_id == MOVE_PID:
+                    a0, a1 = PTRS.get(arg[0], "OOPS!"), R_L[arg[1]]
+                    a_str = "[%s, %s]" % (str(a0), str(a1))
+                elif prog_id == WRITE_PID:
+                    a0, a1 = W_PTRS[arg[0]], arg[1]
+                    a_str = "[%s, %s]" % (str(a0), str(a1))
+                else:
+                    a_str = "[]"
 
-            # Get Environment, Argument Vectors
-            env_in, arg_in, prog_in = [scratch.get_env()], [get_args(arg, arg_in=True)], [[prog_id]]
-            t, n_p, n_args, h_states = session.run([npi.terminate, npi.program_distribution, npi.arguments, npi.h_states],
-                                         feed_dict={npi.env_in: env_in, npi.arg_in: arg_in,
-                                                    npi.prg_in: prog_in, npi.states: states})
-
-            states = np.reshape(h_states, [npi.npi_core_layers, npi.bsz, 2 * npi.npi_core_dim])
-
-            if np.argmax(t) == 1:
-                print('Step: %s, Arguments: %s, Terminate: %s' % (prog_name, a_str, str(True)))
+                # Print Output & Pointers
+                print('Step: %s, Arguments: %s, Terminate: %s' % (prog_name, a_str, str(term)))
                 print('IN 1: %s, IN 2: %s, CARRY: %s, OUT: %s' % (scratch.in1_ptr[1],
                                                                   scratch.in2_ptr[1],
                                                                   scratch.carry_ptr[1],
                                                                   scratch.out_ptr[1]))
-                # Update Environment if MOVE or WRITE
-                if prog_id == MOVE_PID or prog_id == WRITE_PID:
-                    scratch.execute(prog_id, arg)
 
                 # Print Environment
                 scratch.pretty_print()
 
-                output = int("".join(map(str, map(int, scratch[3]))))
-                print("Model Output: %s + %s = %s" % (str(x), str(y), str(output)))
-                print("Correct Out : %s + %s = %s" % (str(x), str(y), str(x + y)))
-                print("Correct!" if output == (x + y) else "Incorrect!")
+            # Get Environment, Argument Vectors
+            env_in, arg_in, prog_in = [scratch.get_env()], [get_args(arg, arg_in=True)], [[prog_id]]
+            t, n_p, n_args, h_states = session.run([npi.terminate, npi.program_distribution, npi.arguments, npi.h_states],
+                                                   feed_dict={npi.env_in: env_in, npi.arg_in: arg_in,
+                                                              npi.prg_in: prog_in, npi.states: states})
 
-                cont = 'n'
+            states = np.reshape(h_states, [npi.npi_core_layers, npi.bsz, 2 * npi.npi_core_dim])
+
+            if np.argmax(t) == 1:
+                # Update Environment if MOVE or WRITE
+                if prog_id == MOVE_PID or prog_id == WRITE_PID:
+                    scratch.execute(prog_id, arg)
+
+                output = int("".join(map(str, map(int, scratch[3]))))
+                result = output == (x + y)
+
+                if verbose:
+                    print('Step: %s, Arguments: %s, Terminate: %s' % (prog_name, a_str, str(True)))
+                    print('IN 1: %s, IN 2: %s, CARRY: %s, OUT: %s' % (scratch.in1_ptr[1],
+                                                                      scratch.in2_ptr[1],
+                                                                      scratch.carry_ptr[1],
+                                                                      scratch.out_ptr[1]))
+
+                    # Print Environment
+                    scratch.pretty_print()
+
+                    print("Model Output: %s + %s = %s" % (str(x), str(y), str(output)))
+                    print("Correct Out : %s + %s = %s" % (str(x), str(y), str(x + y)))
+                    print("Correct!" if output == (x + y) else "Incorrect!")
+
+                break
 
             else:
                 prog_id = np.argmax(n_p)
@@ -126,4 +146,4 @@ def repl(session, npi, data):
                     arg = []
                 term = False
 
-            # cont = input('Continue? ')
+        return result
